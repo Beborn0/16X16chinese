@@ -566,7 +566,7 @@ void displayChineseFromFont(uint8_t x_offset, uint8_t y_offset, char *chinese)
     }
 }
 
-// 多行文本显示辅助函数 - 用于垂直滚动
+// 多行文本显示辅助函数
 void displayMultiLineText(char *text, int16_t x_offset, int16_t y_offset, uint8_t line_spacing)
 {
     int16_t current_x = x_offset;
@@ -574,13 +574,13 @@ void displayMultiLineText(char *text, int16_t x_offset, int16_t y_offset, uint8_
     uint8_t i = 0;
     
     while(text[i] != '\0') {
-        // 检查是否需要换行
+        // 检查是否需要换行 - 修正条件
         if(current_x + CHAR_WIDTH > MAX_X) {
             current_x = x_offset;
             current_y += CHAR_HEIGHT + line_spacing;
         }
         
-        // 检查是否在可见区域内
+        // 检查Y轴可见性
         if(current_y + CHAR_HEIGHT > 0 && current_y < MAX_Y) {
             if((text[i] & 0x80) != 0) {
                 // 处理汉字
@@ -589,23 +589,30 @@ void displayMultiLineText(char *text, int16_t x_offset, int16_t y_offset, uint8_
                     chinese[0] = text[i];
                     chinese[1] = text[i+1];
                     chinese[2] = '\0';
-                    displayChineseFromFont(current_x, current_y, chinese);
+                    
+                    // 修正：只要起始位置在范围内就显示
+                    if(current_x >= 0 && current_x < MAX_X) {
+                        displayChineseFromFont(current_x, current_y, chinese);
+                    }
+                    
                     i += 2;
                 } else {
                     i++;
                     continue;
                 }
             } else {
-                // 处理ASCII
-                // displayChar8x8(current_x, current_y, text[i]);
+                // ASCII处理
+                if(current_x >= 0 && current_x < MAX_X) {
+                    // displayChar8x8(current_x, current_y, text[i]);
+                }
                 i++;
             }
         } else {
             // 不可见区域，仅增加索引
             if((text[i] & 0x80) != 0) {
-                i += 2;  // 汉字占两字节
+                i += 2;
             } else {
-                i++;     // ASCII占一字节
+                i++;
             }
         }
         
@@ -767,12 +774,42 @@ void scrollDisplay(ScrollParams_t *params)
             repeat_count++;
         } while(params->repeat == 0 || repeat_count < params->repeat);
     }
-    // 垂直滚动 - 新增代码
+        // 修正后的垂直滚动逻辑
     else if(params->direction <= 3) {
         int16_t start_pos, end_pos, step;
-        int16_t visible_chars = MAX_X / CHAR_WIDTH;  // 一行可显示的汉字数量
-        int16_t lines = (str_len + visible_chars - 1) / visible_chars;  // 总行数（向上取整）
-        int16_t total_scroll_height = lines * (CHAR_HEIGHT + params->font_spacing) - params->font_spacing;
+        
+        // 重新计算字符串的实际显示需求
+        int16_t total_display_width = 0;
+        int16_t char_count = 0;
+        char *temp_p = params->text;
+        int16_t chars_per_line,total_scroll_height;
+        int16_t actual_lines;
+        params->font_spacing = 0;
+        // 精确计算字符串总宽度和字符数
+        while(*temp_p != '\0') {
+            if((*temp_p & 0x80) != 0) {
+                // 汉字
+                total_display_width += CHAR_WIDTH + params->font_spacing;
+                char_count++;
+                temp_p += 2;
+            } else {
+                // ASCII字符
+                total_display_width += ASCII_WIDTH + params->font_spacing;
+                char_count++;
+                temp_p++;
+            }
+        }
+        
+        // 去掉最后一个字符后的间距
+        if(total_display_width > 0) {
+            total_display_width -= params->font_spacing;
+        }
+        
+        // 计算实际需要的行数
+        chars_per_line = MAX_X / CHAR_WIDTH;  // 每行最多显示的汉字数（按最宽字符计算）
+        actual_lines = (char_count + chars_per_line - 1) / chars_per_line;  // 向上取整
+        
+        total_scroll_height = actual_lines * (CHAR_HEIGHT + params->font_spacing) - params->font_spacing;
         
         if(params->direction == 2) {  // 从上到下
             start_pos = -total_scroll_height;

@@ -32,7 +32,7 @@ void main()
     scroll_struct.pause_start = 1000;    // 开始暂停1秒
     scroll_struct.pause_end = 1000;      // 结束暂停1秒
     scroll_struct.repeat = 1;            // 重复2次
-    scroll_struct.font_spacing = 1;      // 字符间距
+    scroll_struct.font_spacing = 1;      // 字符间距 --- 垂直显示时间距必须设置为0
     while(1)
     {
         // // 水平滚动（从右到左）
@@ -56,6 +56,5 @@ void main()
         delay_ms(500);
         scrollDisplay(&scroll_struct);
         MAX7219_ShowChineseString(0,0, "我是谁");
-        updateDisplay();
     }
 }

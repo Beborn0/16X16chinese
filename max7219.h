@@ -19,7 +19,7 @@
 
 
 // 模块配置宏定义区
-#define MAX7219_HORIZONTAL_MODULES 4    // 水平方向模块数量
+#define MAX7219_HORIZONTAL_MODULES 3    // 水平方向模块数量
 #define MAX7219_VERTICAL_MODULES   1    // 垂直方向模块数量
 #define MAX7219_TOTAL_MODULES      (MAX7219_HORIZONTAL_MODULES * MAX7219_VERTICAL_MODULES * 4)  // 总8x8模块数量
 
@@ -88,6 +88,8 @@ void MAX7219_ShowSingleChinese(uint8_t X, uint8_t Y, char *String);
 void MAX7219_ShowChineseByIndex(uint8_t X, uint8_t Y, uint8_t index);
 void MAX7219_ShowChineseString(uint8_t x_offset, uint8_t y_offset, char *String);
 uint8_t strcmp_custom(char *str1, char *str2);
+void displayChineseFromFont(int16_t x_offset, int16_t y_offset, char *chinese);
+void displayMultiLineText(char *text, int16_t x_offset, int16_t y_offset, uint8_t line_spacing);
 void scrollDisplay(ScrollParams_t *params);
 
 #endif
