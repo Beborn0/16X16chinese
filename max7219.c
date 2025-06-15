@@ -1,5 +1,13 @@
 #include "max7219.h"
 
+/**********delay********** */
+void delay_ms(unsigned int ms)
+{
+    unsigned int i, j;
+    for (i = 0; i < ms; i++)
+        for (j = 0; j < 127; j++);
+}
+
 //向MAX7219 写入地址和数据
 void Max7219WR(uint8_t addr, uint8_t dat)
 {
@@ -63,9 +71,6 @@ void MAX7219Init()
 
 // 全局显示缓冲区
 uint8_t xdata display_buffer[MAX7219_TOTAL_MODULES][MODULE_DOTS]; // 动态配置大小
-// 虚拟缓冲区（按位存储，节省内存）
-uint8_t xdata virtual_buffer[VIRTUAL_WIDTH * VIRTUAL_HEIGHT / 8];  // 每8个点占1字节
-
 
 // 初始化显示缓冲区
 void initDisplayBuffer()
@@ -559,147 +564,166 @@ const ChineseCell_t  code LED_CF16x16[] = {
 };
 
 
-// 清除虚拟缓冲区
-void clearVirtualBuffer()
-{
-    uint16_t i;
-    for(i = 0; i < VIRTUAL_WIDTH * VIRTUAL_HEIGHT / 8; i++) {
-        virtual_buffer[i] = 0;
-    }
-}
 
-// 在虚拟缓冲区上画点
-void drawVirtualPixel(uint16_t x, uint16_t y, uint8_t state)
+// 从字库显示单个汉字的实现
+void displayChineseFromFont(uint8_t x_offset, uint8_t y_offset, char *chinese)
 {
-    uint16_t byte_index;
-    uint8_t bit_index;
-    if(x >= VIRTUAL_WIDTH || y >= VIRTUAL_HEIGHT) return;
-    
-    byte_index = (y * VIRTUAL_WIDTH + x) / 8;
-    bit_index = (y * VIRTUAL_WIDTH + x) % 8;
-    
-    if(state) {
-        virtual_buffer[byte_index] |= (1 << bit_index);
-    } else {
-        virtual_buffer[byte_index] &= ~(1 << bit_index);
-    }
-}
-
-// 在虚拟缓冲区上绘制汉字
-void drawChineseToVirtual(uint16_t x, uint16_t y, char *chinese)
-{
-    // 查找汉字并绘制到虚拟缓冲区
     uint8_t pIndex;
-    char SingleChar[3] = {0};
-    uint8_t row, col;
-    uint8_t byte_index, bit_index;
-    uint8_t current_byte;
-    uint8_t *font_data;
-    SingleChar[0] = chinese[0];
-    SingleChar[1] = chinese[1];
-    SingleChar[2] = '\0';
     
     // 在字库中查找汉字
-    for(pIndex = 0; strcmp_custom(LED_CF16x16[pIndex].Index, "") != 0; pIndex++) {
-        if(strcmp_custom(LED_CF16x16[pIndex].Index, SingleChar) == 0) {
-            break;
+    for (pIndex = 0; strcmp_custom(LED_CF16x16[pIndex].Index, "") != 0; pIndex++)
+    {
+        if (strcmp_custom(LED_CF16x16[pIndex].Index, chinese) == 0)
+        {
+            break;  // 找到匹配的汉字
         }
     }
     
-    // 找到汉字，绘制到虚拟缓冲区
-    if(strcmp_custom(LED_CF16x16[pIndex].Index, "") != 0) {
-        font_data = LED_CF16x16[pIndex].Data;
+    // 显示找到的汉字
+    if (strcmp_custom(LED_CF16x16[pIndex].Index, "") != 0)
+    {
+        // 找到字模数据，显示汉字
+        displayHanzi16x16_RowColumn_LowFirst(x_offset, y_offset, (uint8_t*)LED_CF16x16[pIndex].Data);
+    }
+    else
+    {
+        // 未找到，显示一个方框表示缺字
+        drawRect(x_offset, y_offset, 16, 16);
+    }
+}
+// 滚动显示控制函数
+void scrollDisplay(ScrollParams_t *params)
+{
+    int16_t str_len = 0;
+    int16_t total_width = 0;
+    int16_t i = 0, pos, frame;
+    char *p = params->text;
+    uchar repeat_count = 0;
+    
+    // 计算字符串长度和总宽度
+    while(*p) {
+        if((*p & 0x80) != 0) {
+            str_len++;
+            total_width += 16 + params->font_spacing;
+            p += 2;
+        } else {
+            str_len++;
+            total_width += 8 + params->font_spacing;
+            p++;
+        }
+    }
+    
+    // 减去最后一个字符后不需要的间距
+    if(total_width > 0) {
+        total_width -= params->font_spacing;
+    }
+    
+    // 水平滚动
+    if(params->direction <= 1) {
+        int16_t start_pos, end_pos, step;
+        int16_t char_pos;
+        int16_t char_pos2;
+        if(params->direction == 0) {  // 从右到左
+            start_pos = MAX_X;
+            end_pos = -total_width;
+            step = -1;
+        } else {  // 从左到右
+            start_pos = -total_width;
+            end_pos = MAX_X;
+            step = 1;
+        }
         
-        for( row = 0; row < 16; row++) {
-            for( col = 0; col < 16; col++) {
-                byte_index = row * 2 + (col / 8);
-                bit_index = col % 8;
-                current_byte = font_data[byte_index];
+        do {
+            // 开始暂停
+            if(params->pause_start > 0) {
+                clearScreen();
+                p = params->text;
+                char_pos = (params->direction == 0) ? 0 : (MAX_X - total_width);
                 
-                if(current_byte & (1 << bit_index)) {
-                    drawVirtualPixel(x + col, y + row, 1);
-                }
-            }
-        }
-    }
-}
-
-// 将完整字符串绘制到虚拟缓冲区
-void drawStringToVirtual(uint16_t x, uint16_t y, char *string)
-{
-    uint16_t offset = x;
-    uint16_t i = 0;
-    char chinese[3] = {0};  // 用于存储汉字字符
-    while(string[i] != '\0') {
-        // 处理汉字
-        if((string[i] & 0x80) != 0) {
-            if(string[i+1] != '\0') {
-                chinese[0] = string[i];
-                chinese[1] = string[i+1];
-                chinese[2] = '\0';
-                drawChineseToVirtual(offset, y, chinese);
-                offset += 16;  // 汉字宽度16像素
-                i += 2;
-            } else {
-                i++;  // 避免越界
-            }
-        }
-        // 处理ASCII字符
-        else {
-            // 这里可以添加ASCII字符绘制代码
-            offset += 8;  // ASCII宽度8像素
-            i++;
-        }
-    }
-}
-extern void delay_ms(unsigned int ms);
-// 水平滚动显示
-void scrollHorizontal(char *string, uint8_t speed_delay, uint8_t cycles)
-{
-    uint16_t total_width;  // 字符串总宽度
-    uint16_t i, cycle;
-    uint8_t ch_count = 0;
-    uint16_t x,y;  // 虚拟缓冲区宽度
-    uint16_t virt_x;
-    uint16_t byte_index;
-    uint8_t bit_index;
-    // 计算字符串总宽度
-    for(i = 0; string[i] != '\0'; i++) {
-        if((string[i] & 0x80) != 0) {
-            ch_count++;  // 汉字计数
-            i++;  // 跳过汉字第二字节
-        }
-    }
-    
-    total_width = ch_count * 16 + (i - ch_count * 2) * 8;  // 汉字16像素宽，ASCII字符8像素宽
-    
-    // 初始化虚拟缓冲区
-    clearVirtualBuffer();
-    
-    // 绘制字符串到虚拟缓冲区
-    drawStringToVirtual(0, 0, string);
-    
-    // 滚动显示
-    for(cycle = 0; cycle < cycles; cycle++) {
-        for(i = 0; i <= total_width - MAX_X; i++) {
-            clearScreen();
-            
-            // 将虚拟缓冲区的一部分复制到显示缓冲区
-            for( y = 0; y < MAX_Y; y++) {
-                for( x = 0; x < MAX_X; x++) {
-                    virt_x = i + x;
-                    byte_index = (y * VIRTUAL_WIDTH + virt_x) / 8;
-                    bit_index = (y * VIRTUAL_WIDTH + virt_x) % 8;
-                    
-                    if(virtual_buffer[byte_index] & (1 << bit_index)) {
-                        drawPixel(x, y, 1);
+                // 显示静止文本
+                while(*p) {
+                    if((*p & 0x80) != 0) {
+                        char chinese[3];
+                        chinese[0] = *p;
+                        chinese[1] = *(p+1);
+                        chinese[2] = '\0';
+                        displayChineseFromFont(char_pos, 0, chinese);
+                        char_pos += 16 + params->font_spacing;
+                        p += 2;
+                    } else {
+                        // displayChar8x8(char_pos, 0, *p);
+                        char_pos += 8 + params->font_spacing;
+                        p++;
                     }
                 }
+                
+                updateDisplay();
+                delay_ms(params->pause_start);
             }
             
-            updateDisplay();
-            delay_ms(speed_delay);
-        }
+            // 滚动显示
+            for(pos = start_pos; (step > 0) ? (pos <= end_pos) : (pos >= end_pos); pos += step) {
+                clearScreen();
+                
+                p = params->text;
+                char_pos2 = pos;
+                
+                while(*p) {
+                    if((*p & 0x80) != 0) {
+                        char chinese[3];
+                        chinese[0] = *p;
+                        chinese[1] = *(p+1);
+                        chinese[2] = '\0';
+                        
+                        if(char_pos2 + 16 > 0 && char_pos2 < MAX_X) {
+                            displayChineseFromFont(char_pos2, 0, chinese);
+                        }
+                        
+                        char_pos2 += 16 + params->font_spacing;
+                        p += 2;
+                    } else {
+                        if(char_pos2 + 8 > 0 && char_pos2 < MAX_X) {
+                            // displayChar8x8(char_pos, 0, *p);
+                        }
+                        
+                        char_pos2 += 8 + params->font_spacing;
+                        p++;
+                    }
+                }
+                
+                updateDisplay();
+                delay_ms(params->speed);
+            }
+            
+            // 结束暂停
+            if(params->pause_end > 0) {
+                clearScreen();
+                p = params->text;
+                char_pos = (params->direction == 0) ? (MAX_X - total_width) : 0;
+                
+                // 显示静止文本
+                while(*p) {
+                    if((*p & 0x80) != 0) {
+                        char chinese[3];
+                        chinese[0] = *p;
+                        chinese[1] = *(p+1);
+                        chinese[2] = '\0';
+                        displayChineseFromFont(char_pos, 0, chinese);
+                        char_pos += 16 + params->font_spacing;
+                        p += 2;
+                    } else {
+                        // displayChar8x8(char_pos, 0, *p);
+                        char_pos += 8 + params->font_spacing;
+                        p++;
+                    }
+                }
+                
+                updateDisplay();
+                delay_ms(params->pause_end);
+            }
+            
+            repeat_count++;
+        } while(params->repeat == 0 || repeat_count < params->repeat);
     }
+    // 垂直滚动可以类似实现...
 }
-

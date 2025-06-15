@@ -9,7 +9,7 @@
 
 #define uint8_t unsigned char
 #define uint8_t unsigned char
-#define uint unsigned char
+#define uchar unsigned char
 #define int8_t  char
 #define uint16_t  unsigned int
 #define uint32_t unsigned long
@@ -24,9 +24,6 @@
 #define MAX7219_HORIZONTAL_MODULES 2    // 水平方向模块数量
 #define MAX7219_VERTICAL_MODULES   1    // 垂直方向模块数量
 #define MAX7219_TOTAL_MODULES      (MAX7219_HORIZONTAL_MODULES * MAX7219_VERTICAL_MODULES * 4)  // 总8x8模块数量
-// 虚拟缓冲区定义
-#define VIRTUAL_WIDTH      MAX7219_TOTAL_MODULES * 16     // 虚拟宽度，可根据需要调整
-#define VIRTUAL_HEIGHT     16      // 虚拟高度，通常与实际显示高度相同
 
 // 显示参数常量
 #define MODULE_DOTS          8     // 每个模块的点数（8x8）
@@ -43,6 +40,18 @@ sbit CLK = P2 ^ 2; //时钟 Max7219_pin
 sbit CS  = P2 ^ 1; //锁存
 sbit DIN = P2 ^ 0; //数据
 
+
+// 滚动参数结构体
+typedef struct {
+    char *text;            // 显示文本
+    uchar direction;       // 0=从右到左, 1=从左到右, 2=从下到上, 3=从上到下
+    uchar speed;           // 滚动速度 (延迟毫秒数)
+    uint16_t pause_start;  // 开始暂停毫秒数
+    uint16_t pause_end;    // 结束暂停毫秒数
+    uchar repeat;          // 重复次数，0=无限循环
+    uchar font_spacing;    // 字符间距
+} ScrollParams_t;
+
 // 汉字字库结构体
 /*字模基本单元*/
 typedef struct 
@@ -54,6 +63,7 @@ typedef struct
 /*汉字字模数据声明*/
 extern const ChineseCell_t  code LED_CF16x16[];
 
+void delay_ms(uint16_t ms);
 
 void Max7219WR(uint8_t addr, uint8_t dat);
 void MAX7219Init();
@@ -74,6 +84,6 @@ void MAX7219_ShowSingleChinese(uint8_t X, uint8_t Y, char *String);
 void MAX7219_ShowChineseByIndex(uint8_t X, uint8_t Y, uint8_t index);
 void MAX7219_ShowChineseString(uint8_t x_offset, uint8_t y_offset, char *String);
 uint8_t strcmp_custom(char *str1, char *str2);
-void scrollHorizontal(char *string, uint8_t speed_delay, uint8_t cycles);
+void scrollDisplay(ScrollParams_t *params);
 
 #endif
