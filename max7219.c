@@ -83,10 +83,6 @@ void initDisplayBuffer()
     }
 }
 
-// 计算模块坐标的宏
-#define GET_MODULE_ID(x, y) ((y / MODULE_DOTS) * (MAX7219_HORIZONTAL_MODULES * 2) + \
-                              (x / MODULE_DOTS) + ((y % MODULE_DOTS) >= MODULE_DOTS / 2 ? \
-                              MAX7219_HORIZONTAL_MODULES : 0))
 
 // 优化后的画点函数 - 适应任意数量级联
 void drawPixel(uint8_t x, uint8_t y, uint8_t state)
@@ -222,33 +218,7 @@ void drawRect(uint8_t x, uint8_t y, uint8_t width, uint8_t height)
     }
 }
 
-// 使用现有的laji数组测试S型级联
-uint8_t code laji[][8] =
-{
-    {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80}, //A
-    {0x7C, 0x42, 0x42, 0x7C, 0x42, 0x42, 0x42, 0x7C}, //B
-    {0x3C, 0x42, 0x40, 0x40, 0x40, 0x40, 0x42, 0x7C}, //C
-    {0x7C, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x7C}, //D
-};
-
-// 修正后的S型显示测试函数
-void displayS_Type()
-{
-    uint8_t i;
-    
-    for(i = 0; i < 8; i++)  // 8行
-    {
-        // 按正确的发送顺序：[3]→[2]→[1]→[0]
-        Max7219WR(i + 1, laji[3][i]);  // 模块4（右下）
-        Max7219WR(i + 1, laji[2][i]);  // 模块3（左下）
-        Max7219WR(i + 1, laji[1][i]);  // 模块2（右上） 
-        Max7219WR(i + 1, laji[0][i]);  // 模块1（左上）
-        
-        CS = 1;
-        _nop_();
-        CS = 0;
-    }
-}
+//逐行取模
 // 适用于行列式低位在前取模方式的16x16汉字显示函数
 void displayHanzi16x16_RowColumn_LowFirst(uint8_t x_offset, uint8_t y_offset, uint8_t *hanzi_data)
 {
@@ -417,10 +387,6 @@ void MAX7219_ShowSingleChinese(uint8_t X, uint8_t Y, char *String)
     }
 }
 
-
-// // 检查坐标是否在显示范围内的宏
-// #define IS_COORD_VALID(x, y) ((x) < MAX_X && (y) < MAX_Y)
-
 // 显示多个汉字的函数
 void MAX7219_ShowChineseString(uint8_t x_offset, uint8_t y_offset, char *String)
 {
@@ -554,6 +520,16 @@ const ChineseCell_t  code LED_CF16x16[] = {
 	0x00,0x00,0xF8,0x0F,0x88,0x08,0x88,0x08,0xF8,0x0F,0x88,0x08,0x88,0x08,0xF8,0x0F,
     0x40,0x01,0x30,0x06,0x2C,0x1A,0x23,0x62,0x20,0x02,0x10,0x02,0x10,0x02,0x08,0x02,/*"界",1*/
 	
+    "我",
+    0x20,0x02,0x70,0x0A,0x1E,0x12,0x10,0x12,0x10,0x02,0xFF,0x7F,0x10,0x02,0x10,0x22,
+    0x50,0x22,0x30,0x12,0x18,0x0C,0x16,0x44,0x10,0x4A,0x10,0x51,0xD4,0x60,0x08,0x40,/*"我",0*/
+    "是",
+    0xF8,0x0F,0x08,0x08,0x08,0x08,0xF8,0x0F,0x08,0x08,0x08,0x08,0xF8,0x0F,0x00,0x00,
+    0xFF,0x7F,0x80,0x00,0x88,0x00,0x88,0x1F,0x88,0x00,0x94,0x00,0xA2,0x00,0xC1,0x7F,/*"是",1*/
+    "谁",
+    0x80,0x02,0x82,0x04,0x84,0x04,0xC4,0x7F,0x40,0x04,0x60,0x04,0xD7,0x3F,0x44,0x04,
+    0x44,0x04,0xC4,0x3F,0x44,0x04,0x44,0x04,0x54,0x04,0xCC,0x7F,0x44,0x00,0x40,0x00,/*"谁",2*/
+
 	/*按照上面的格式，在这个位置加入新的汉字数据*/
 	//...
 	/*未找到指定汉字时显示的默认图形（一个方框，内部一个问号），请确保其位于数组最末尾*/
@@ -562,8 +538,6 @@ const ChineseCell_t  code LED_CF16x16[] = {
 	0xFF,0x80,0x80,0x80,0x80,0x80,0x80,0x96,0x81,0x80,0x80,0x80,0x80,0x80,0x80,0xFF,
 
 };
-
-
 
 // 从字库显示单个汉字的实现
 void displayChineseFromFont(uint8_t x_offset, uint8_t y_offset, char *chinese)
@@ -591,15 +565,64 @@ void displayChineseFromFont(uint8_t x_offset, uint8_t y_offset, char *chinese)
         drawRect(x_offset, y_offset, 16, 16);
     }
 }
-// 滚动显示控制函数
+
+// 多行文本显示辅助函数 - 用于垂直滚动
+void displayMultiLineText(char *text, int16_t x_offset, int16_t y_offset, uint8_t line_spacing)
+{
+    int16_t current_x = x_offset;
+    int16_t current_y = y_offset;
+    uint8_t i = 0;
+    
+    while(text[i] != '\0') {
+        // 检查是否需要换行
+        if(current_x + CHAR_WIDTH > MAX_X) {
+            current_x = x_offset;
+            current_y += CHAR_HEIGHT + line_spacing;
+        }
+        
+        // 检查是否在可见区域内
+        if(current_y + CHAR_HEIGHT > 0 && current_y < MAX_Y) {
+            if((text[i] & 0x80) != 0) {
+                // 处理汉字
+                if(text[i+1] != '\0') {
+                    char chinese[3];
+                    chinese[0] = text[i];
+                    chinese[1] = text[i+1];
+                    chinese[2] = '\0';
+                    displayChineseFromFont(current_x, current_y, chinese);
+                    i += 2;
+                } else {
+                    i++;
+                    continue;
+                }
+            } else {
+                // 处理ASCII
+                // displayChar8x8(current_x, current_y, text[i]);
+                i++;
+            }
+        } else {
+            // 不可见区域，仅增加索引
+            if((text[i] & 0x80) != 0) {
+                i += 2;  // 汉字占两字节
+            } else {
+                i++;     // ASCII占一字节
+            }
+        }
+        
+        // 移动到下一个字符位置
+        current_x += CHAR_WIDTH + line_spacing;
+    }
+}
+// 滚动显示控制函数 - 支持水平和垂直滚动
 void scrollDisplay(ScrollParams_t *params)
 {
     int16_t str_len = 0;
     int16_t total_width = 0;
+    int16_t total_height = CHAR_HEIGHT; // 垂直滚动基础高度
     int16_t i = 0, pos, frame;
     char *p = params->text;
-    uchar repeat_count = 0;
-    
+    uint8_t repeat_count = 0;
+    int16_t char_pos;
     // 计算字符串长度和总宽度
     while(*p) {
         if((*p & 0x80) != 0) {
@@ -612,46 +635,55 @@ void scrollDisplay(ScrollParams_t *params)
             p++;
         }
     }
-    
     // 减去最后一个字符后不需要的间距
     if(total_width > 0) {
         total_width -= params->font_spacing;
     }
     
-    // 水平滚动
+    // 水平滚动 - 使用MAX_X确保适应级联数量
     if(params->direction <= 1) {
         int16_t start_pos, end_pos, step;
-        int16_t char_pos;
-        int16_t char_pos2;
+        
         if(params->direction == 0) {  // 从右到左
-            start_pos = MAX_X;
+            start_pos = MAX_X;  // 使用动态计算的MAX_X
             end_pos = -total_width;
             step = -1;
         } else {  // 从左到右
             start_pos = -total_width;
-            end_pos = MAX_X;
+            end_pos = MAX_X;  // 使用动态计算的MAX_X
             step = 1;
         }
         
         do {
-            // 开始暂停
+            // 开始暂停逻辑
             if(params->pause_start > 0) {
                 clearScreen();
                 p = params->text;
-                char_pos = (params->direction == 0) ? 0 : (MAX_X - total_width);
+                // 居中显示计算 - 考虑实际显示宽度
+                // char_pos = (params->direction == 0) ? 0 : (MAX_X - total_width);
+                // 改为以下代码，确保在3个模块内显示所有文本
+                char_pos = (params->direction == 0) ? 
+                (total_width <= MAX_X ? 0 : (MAX_X - total_width) / 2) : // 优先左侧对齐，内容过长时居中
+                (MAX_X - total_width > 0 ? MAX_X - total_width : 0);     // 右侧对齐，但不超出左边界
                 
-                // 显示静止文本
+                // 显示静止文本 - 限制在MAX_X范围内
                 while(*p) {
                     if((*p & 0x80) != 0) {
-                        char chinese[3];
-                        chinese[0] = *p;
-                        chinese[1] = *(p+1);
-                        chinese[2] = '\0';
-                        displayChineseFromFont(char_pos, 0, chinese);
+                        // 确保在有效显示范围内
+                        if(char_pos + 16 <= MAX_X) {
+                            char chinese[3];
+                            chinese[0] = *p;
+                            chinese[1] = *(p+1);
+                            chinese[2] = '\0';
+                            displayChineseFromFont(char_pos, 0, chinese);
+                        }
                         char_pos += 16 + params->font_spacing;
                         p += 2;
                     } else {
-                        // displayChar8x8(char_pos, 0, *p);
+                        // ASCII处理
+                        if(char_pos + 8 <= MAX_X) {
+                            // displayChar8x8(char_pos, 0, *p);
+                        }
                         char_pos += 8 + params->font_spacing;
                         p++;
                     }
@@ -661,32 +693,33 @@ void scrollDisplay(ScrollParams_t *params)
                 delay_ms(params->pause_start);
             }
             
-            // 滚动显示
+            // 滚动显示 - 适应任意级联数量
             for(pos = start_pos; (step > 0) ? (pos <= end_pos) : (pos >= end_pos); pos += step) {
                 clearScreen();
                 
                 p = params->text;
-                char_pos2 = pos;
+                char_pos = pos;
                 
                 while(*p) {
                     if((*p & 0x80) != 0) {
-                        char chinese[3];
-                        chinese[0] = *p;
-                        chinese[1] = *(p+1);
-                        chinese[2] = '\0';
-                        
-                        if(char_pos2 + 16 > 0 && char_pos2 < MAX_X) {
-                            displayChineseFromFont(char_pos2, 0, chinese);
+                        // 确保只在可视范围内绘制(0到MAX_X)
+                        if(char_pos + 16 > 0 && char_pos < MAX_X) {
+                            char chinese[3];
+                            chinese[0] = *p;
+                            chinese[1] = *(p+1);
+                            chinese[2] = '\0';
+                            displayChineseFromFont(char_pos, 0, chinese);
                         }
                         
-                        char_pos2 += 16 + params->font_spacing;
+                        char_pos += 16 + params->font_spacing;
                         p += 2;
                     } else {
-                        if(char_pos2 + 8 > 0 && char_pos2 < MAX_X) {
+                        // 确保只在可视范围内绘制
+                        if(char_pos + 8 > 0 && char_pos < MAX_X) {
                             // displayChar8x8(char_pos, 0, *p);
                         }
                         
-                        char_pos2 += 8 + params->font_spacing;
+                        char_pos += 8 + params->font_spacing;
                         p++;
                     }
                 }
@@ -695,24 +728,33 @@ void scrollDisplay(ScrollParams_t *params)
                 delay_ms(params->speed);
             }
             
-            // 结束暂停
+            // 结束暂停逻辑
             if(params->pause_end > 0) {
+                // 类似开始暂停，但位置可能不同
                 clearScreen();
                 p = params->text;
-                char_pos = (params->direction == 0) ? (MAX_X - total_width) : 0;
+                if(params->direction == 0) {
+                    char_pos = MAX_X - total_width;
+                } else {
+                    char_pos = 0;
+                }
                 
-                // 显示静止文本
-                while(*p) {
+                // 限制在MAX_X范围内显示
+                while(*p && char_pos < MAX_X) {
                     if((*p & 0x80) != 0) {
-                        char chinese[3];
-                        chinese[0] = *p;
-                        chinese[1] = *(p+1);
-                        chinese[2] = '\0';
-                        displayChineseFromFont(char_pos, 0, chinese);
+                        if(char_pos + 16 <= MAX_X) {
+                            char chinese[3];
+                            chinese[0] = *p;
+                            chinese[1] = *(p+1);
+                            chinese[2] = '\0';
+                            displayChineseFromFont(char_pos, 0, chinese);
+                        }
                         char_pos += 16 + params->font_spacing;
                         p += 2;
                     } else {
-                        // displayChar8x8(char_pos, 0, *p);
+                        if(char_pos + 8 <= MAX_X) {
+                            // displayChar8x8(char_pos, 0, *p);
+                        }
                         char_pos += 8 + params->font_spacing;
                         p++;
                     }
@@ -725,5 +767,51 @@ void scrollDisplay(ScrollParams_t *params)
             repeat_count++;
         } while(params->repeat == 0 || repeat_count < params->repeat);
     }
-    // 垂直滚动可以类似实现...
+    // 垂直滚动 - 新增代码
+    else if(params->direction <= 3) {
+        int16_t start_pos, end_pos, step;
+        int16_t visible_chars = MAX_X / CHAR_WIDTH;  // 一行可显示的汉字数量
+        int16_t lines = (str_len + visible_chars - 1) / visible_chars;  // 总行数（向上取整）
+        int16_t total_scroll_height = lines * (CHAR_HEIGHT + params->font_spacing) - params->font_spacing;
+        
+        if(params->direction == 2) {  // 从上到下
+            start_pos = -total_scroll_height;
+            end_pos = MAX_Y;
+            step = 1;
+        } else {  // 从下到上
+            start_pos = MAX_Y;
+            end_pos = -total_scroll_height;
+            step = -1;
+        }
+        
+        do {
+            // 开始暂停
+            if(params->pause_start > 0) {
+                clearScreen();
+                displayMultiLineText(params->text, 0, 0, params->font_spacing);
+                updateDisplay();
+                delay_ms(params->pause_start);
+            }
+            
+            // 垂直滚动显示
+            for(pos = start_pos; (step > 0) ? (pos <= end_pos) : (pos >= end_pos); pos += step) {
+                clearScreen();
+                displayMultiLineText(params->text, 0, pos, params->font_spacing);
+                updateDisplay();
+                delay_ms(params->speed);
+            }
+            
+            // 结束暂停
+            if(params->pause_end > 0) {
+                clearScreen();
+                displayMultiLineText(params->text, 0, 
+                    (params->direction == 2) ? (MAX_Y - total_scroll_height) : 0, 
+                    params->font_spacing);
+                updateDisplay();
+                delay_ms(params->pause_end);
+            }
+            
+            repeat_count++;
+        } while(params->repeat == 0 || repeat_count < params->repeat);
+    }
 }

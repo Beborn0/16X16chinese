@@ -16,14 +16,15 @@
 #define int16_t  int
 #define IS_COORD_VALID(x, y) ((x) < MAX_X && (y) < MAX_Y) // 检查坐标是否有效
 #define IS_MODULE_VALID(module_id) ((module_id) < MAX7219_TOTAL_MODULES) // 检查模块ID是否有效
-#define number  4 //点阵级联个数
-#define lum     5 //亮度级别，0-F,共16级
 
 
 // 模块配置宏定义区
-#define MAX7219_HORIZONTAL_MODULES 2    // 水平方向模块数量
+#define MAX7219_HORIZONTAL_MODULES 4    // 水平方向模块数量
 #define MAX7219_VERTICAL_MODULES   1    // 垂直方向模块数量
 #define MAX7219_TOTAL_MODULES      (MAX7219_HORIZONTAL_MODULES * MAX7219_VERTICAL_MODULES * 4)  // 总8x8模块数量
+
+#define number  MAX7219_TOTAL_MODULES //点阵级联个数
+#define lum     5 //亮度级别，0-F,共16级
 
 // 显示参数常量
 #define MODULE_DOTS          8     // 每个模块的点数（8x8）
@@ -34,6 +35,11 @@
 // 计算显示范围
 #define MAX_X               (MAX7219_HORIZONTAL_MODULES * CHAR_WIDTH)   // X轴最大坐标
 #define MAX_Y               (MAX7219_VERTICAL_MODULES * CHAR_HEIGHT)    // Y轴最大坐标
+
+// 计算模块坐标的宏
+#define GET_MODULE_ID(x, y) ((y / MODULE_DOTS) * (MAX7219_HORIZONTAL_MODULES * 2) + \
+                              (x / MODULE_DOTS) + ((y % MODULE_DOTS) >= MODULE_DOTS / 2 ? \
+                              MAX7219_HORIZONTAL_MODULES : 0))
 
 //定义Max7219端口
 sbit CLK = P2 ^ 2; //时钟 Max7219_pin
@@ -51,7 +57,6 @@ typedef struct {
     uchar repeat;          // 重复次数，0=无限循环
     uchar font_spacing;    // 字符间距
 } ScrollParams_t;
-
 // 汉字字库结构体
 /*字模基本单元*/
 typedef struct 
@@ -63,7 +68,7 @@ typedef struct
 /*汉字字模数据声明*/
 extern const ChineseCell_t  code LED_CF16x16[];
 
-void delay_ms(uint16_t ms);
+void delay_ms(unsigned int ms);
 
 void Max7219WR(uint8_t addr, uint8_t dat);
 void MAX7219Init();
@@ -76,7 +81,6 @@ void clearArea(uint8_t x, uint8_t y, uint8_t width, uint8_t height);
 void drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1);
 void drawRect(uint8_t x, uint8_t y, uint8_t width, uint8_t height);
 
-void displayS_Type();
 void displayHanzi16x16_RowColumn_LowFirst(uint8_t x_offset, uint8_t y_offset, uint8_t *hanzi_data);
 void displayChar8x8(uint8_t x_offset, uint8_t y_offset, uint8_t *char_data);
 void MAX7219_ShowString(uint8_t X, uint8_t Y, char *String);
