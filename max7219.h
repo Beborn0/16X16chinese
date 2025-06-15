@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#define uchar unsigned char
+#define uint8_t unsigned char
 #define uint8_t unsigned char
 #define uint unsigned char
 #define int8_t  char
@@ -55,24 +55,25 @@ typedef struct
 extern const ChineseCell_t  code LED_CF16x16[];
 
 
-void Max7219WR(uchar addr, uchar dat);
+void Max7219WR(uint8_t addr, uint8_t dat);
 void MAX7219Init();
 
 void initDisplayBuffer();
-void drawPixel(uchar x, uchar y, uchar state);
+void drawPixel(uint8_t x, uint8_t y, uint8_t state);
 void updateDisplay();
 void clearScreen();
-void clearArea(uchar x, uchar y, uchar width, uchar height);
-void drawLine(uchar x0, uchar y0, uchar x1, uchar y1);
-void drawRect(uchar x, uchar y, uchar width, uchar height);
+void clearArea(uint8_t x, uint8_t y, uint8_t width, uint8_t height);
+void drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1);
+void drawRect(uint8_t x, uint8_t y, uint8_t width, uint8_t height);
 
 void displayS_Type();
-void displayHanzi16x16_RowColumn_LowFirst(uchar x_offset, uchar y_offset, uchar *hanzi_data);
-void displayChar8x8(uchar x_offset, uchar y_offset, uchar *char_data);
-void MAX7219_ShowString(uchar X, uchar Y, char *String);
-void MAX7219_ShowSingleChinese(uchar X, uchar Y, char *String);
-void MAX7219_ShowChineseByIndex(uchar X, uchar Y, uchar index);
-void MAX7219_ShowChineseString(uchar x_offset, uchar y_offset, char *String);
-uchar strcmp_custom(char *str1, char *str2);
+void displayHanzi16x16_RowColumn_LowFirst(uint8_t x_offset, uint8_t y_offset, uint8_t *hanzi_data);
+void displayChar8x8(uint8_t x_offset, uint8_t y_offset, uint8_t *char_data);
+void MAX7219_ShowString(uint8_t X, uint8_t Y, char *String);
+void MAX7219_ShowSingleChinese(uint8_t X, uint8_t Y, char *String);
+void MAX7219_ShowChineseByIndex(uint8_t X, uint8_t Y, uint8_t index);
+void MAX7219_ShowChineseString(uint8_t x_offset, uint8_t y_offset, char *String);
+uint8_t strcmp_custom(char *str1, char *str2);
+void scrollHorizontal(char *string, uint8_t speed_delay, uint8_t cycles);
 
 #endif

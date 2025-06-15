@@ -60,6 +60,12 @@ void main()
         }
         updateDisplay();
         delay_ms(2000); // 延时2秒
-        delay_ms(2000); // 延时2秒
+        clearScreen();
+        scrollHorizontal("你好世界", 100, 1); // 水平滚动显示
+        for(i = 0; i < 8; i++) {
+            for(j = 0; j < 8; j++) {
+                drawPixel(i, j, (num_0[i] >> (7 - j)) & 0x01); // 显示数字0
+            }
+        }
     }
 }

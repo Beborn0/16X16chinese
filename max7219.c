@@ -155,27 +155,6 @@ void updateDisplay()
         CS = 0;
     }
 }
-
-// // 清屏函数
-// void clearScreen()
-// {
-//     initDisplayBuffer();
-//     updateDisplay();
-// }
-// // 清除指定区域
-// void clearArea(uint8_t x, uint8_t y, uint8_t width, uint8_t height)
-// {
-//     uint8_t i, j;
-//     for(i = 0; i < height; i++) {
-//         for(j = 0; j < width; j++) {
-//             if((x + j) < 16 && (y + i) < 16) {
-//                 drawPixel(x + j, y + i, 0);
-//             }
-//         }
-//     }
-// }
-// 画线函数（额外功能）
-
 // 清屏函数
 void clearScreen()
 {
@@ -197,8 +176,6 @@ void clearArea(uint8_t x, uint8_t y, uint8_t width, uint8_t height)
         }
     }
 }
-
-
 void drawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1)
 {
     int16_t dx = abs(x1 - x0);
@@ -580,4 +557,149 @@ const ChineseCell_t  code LED_CF16x16[] = {
 	0xFF,0x80,0x80,0x80,0x80,0x80,0x80,0x96,0x81,0x80,0x80,0x80,0x80,0x80,0x80,0xFF,
 
 };
+
+
+// 清除虚拟缓冲区
+void clearVirtualBuffer()
+{
+    uint16_t i;
+    for(i = 0; i < VIRTUAL_WIDTH * VIRTUAL_HEIGHT / 8; i++) {
+        virtual_buffer[i] = 0;
+    }
+}
+
+// 在虚拟缓冲区上画点
+void drawVirtualPixel(uint16_t x, uint16_t y, uint8_t state)
+{
+    uint16_t byte_index;
+    uint8_t bit_index;
+    if(x >= VIRTUAL_WIDTH || y >= VIRTUAL_HEIGHT) return;
+    
+    byte_index = (y * VIRTUAL_WIDTH + x) / 8;
+    bit_index = (y * VIRTUAL_WIDTH + x) % 8;
+    
+    if(state) {
+        virtual_buffer[byte_index] |= (1 << bit_index);
+    } else {
+        virtual_buffer[byte_index] &= ~(1 << bit_index);
+    }
+}
+
+// 在虚拟缓冲区上绘制汉字
+void drawChineseToVirtual(uint16_t x, uint16_t y, char *chinese)
+{
+    // 查找汉字并绘制到虚拟缓冲区
+    uint8_t pIndex;
+    char SingleChar[3] = {0};
+    uint8_t row, col;
+    uint8_t byte_index, bit_index;
+    uint8_t current_byte;
+    uint8_t *font_data;
+    SingleChar[0] = chinese[0];
+    SingleChar[1] = chinese[1];
+    SingleChar[2] = '\0';
+    
+    // 在字库中查找汉字
+    for(pIndex = 0; strcmp_custom(LED_CF16x16[pIndex].Index, "") != 0; pIndex++) {
+        if(strcmp_custom(LED_CF16x16[pIndex].Index, SingleChar) == 0) {
+            break;
+        }
+    }
+    
+    // 找到汉字，绘制到虚拟缓冲区
+    if(strcmp_custom(LED_CF16x16[pIndex].Index, "") != 0) {
+        font_data = LED_CF16x16[pIndex].Data;
+        
+        for( row = 0; row < 16; row++) {
+            for( col = 0; col < 16; col++) {
+                byte_index = row * 2 + (col / 8);
+                bit_index = col % 8;
+                current_byte = font_data[byte_index];
+                
+                if(current_byte & (1 << bit_index)) {
+                    drawVirtualPixel(x + col, y + row, 1);
+                }
+            }
+        }
+    }
+}
+
+// 将完整字符串绘制到虚拟缓冲区
+void drawStringToVirtual(uint16_t x, uint16_t y, char *string)
+{
+    uint16_t offset = x;
+    uint16_t i = 0;
+    char chinese[3] = {0};  // 用于存储汉字字符
+    while(string[i] != '\0') {
+        // 处理汉字
+        if((string[i] & 0x80) != 0) {
+            if(string[i+1] != '\0') {
+                chinese[0] = string[i];
+                chinese[1] = string[i+1];
+                chinese[2] = '\0';
+                drawChineseToVirtual(offset, y, chinese);
+                offset += 16;  // 汉字宽度16像素
+                i += 2;
+            } else {
+                i++;  // 避免越界
+            }
+        }
+        // 处理ASCII字符
+        else {
+            // 这里可以添加ASCII字符绘制代码
+            offset += 8;  // ASCII宽度8像素
+            i++;
+        }
+    }
+}
+extern void delay_ms(unsigned int ms);
+// 水平滚动显示
+void scrollHorizontal(char *string, uint8_t speed_delay, uint8_t cycles)
+{
+    uint16_t total_width;  // 字符串总宽度
+    uint16_t i, cycle;
+    uint8_t ch_count = 0;
+    uint16_t x,y;  // 虚拟缓冲区宽度
+    uint16_t virt_x;
+    uint16_t byte_index;
+    uint8_t bit_index;
+    // 计算字符串总宽度
+    for(i = 0; string[i] != '\0'; i++) {
+        if((string[i] & 0x80) != 0) {
+            ch_count++;  // 汉字计数
+            i++;  // 跳过汉字第二字节
+        }
+    }
+    
+    total_width = ch_count * 16 + (i - ch_count * 2) * 8;  // 汉字16像素宽，ASCII字符8像素宽
+    
+    // 初始化虚拟缓冲区
+    clearVirtualBuffer();
+    
+    // 绘制字符串到虚拟缓冲区
+    drawStringToVirtual(0, 0, string);
+    
+    // 滚动显示
+    for(cycle = 0; cycle < cycles; cycle++) {
+        for(i = 0; i <= total_width - MAX_X; i++) {
+            clearScreen();
+            
+            // 将虚拟缓冲区的一部分复制到显示缓冲区
+            for( y = 0; y < MAX_Y; y++) {
+                for( x = 0; x < MAX_X; x++) {
+                    virt_x = i + x;
+                    byte_index = (y * VIRTUAL_WIDTH + virt_x) / 8;
+                    bit_index = (y * VIRTUAL_WIDTH + virt_x) % 8;
+                    
+                    if(virtual_buffer[byte_index] & (1 << bit_index)) {
+                        drawPixel(x, y, 1);
+                    }
+                }
+            }
+            
+            updateDisplay();
+            delay_ms(speed_delay);
+        }
+    }
+}
 
