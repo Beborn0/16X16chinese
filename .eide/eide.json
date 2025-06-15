@@ -1,0 +1,92 @@
+{
+  "name": "MAX7219",
+  "type": "C51",
+  "dependenceList": [],
+  "srcDirs": [],
+  "virtualFolder": {
+    "name": "<virtual_root>",
+    "files": [],
+    "folders": [
+      {
+        "name": "USER",
+        "files": [
+          {
+            "path": "main.c"
+          },
+          {
+            "path": "max7219.h"
+          },
+          {
+            "path": "max7219.c"
+          },
+          {
+            "path": "max7219font.c"
+          },
+          {
+            "path": "max7219font.h"
+          }
+        ],
+        "folders": []
+      }
+    ]
+  },
+  "outDir": "build",
+  "deviceName": null,
+  "packDir": null,
+  "miscInfo": {
+    "uid": "f3fba841235a141f1c5af657497dc55e"
+  },
+  "targets": {
+    "MAX7219": {
+      "excludeList": [],
+      "toolchain": "Keil_C51",
+      "compileConfig": {
+        "options": "null"
+      },
+      "uploader": "stcgal",
+      "uploadConfig": {
+        "bin": "",
+        "eepromImgPath": "null",
+        "extraOptions": "",
+        "options": ".eide/stc.flash.json"
+      },
+      "uploadConfigMap": {
+        "Custom": {
+          "bin": "",
+          "commandLine": "",
+          "eraseChipCommand": ""
+        }
+      },
+      "custom_dep": {
+        "name": "default",
+        "incList": [
+          "D:/Keil/C51/INC/Atmel"
+        ],
+        "libList": [],
+        "defineList": []
+      },
+      "builderOptions": {
+        "Keil_C51": {
+          "version": 2,
+          "beforeBuildTasks": [],
+          "afterBuildTasks": [],
+          "global": {
+            "ram-mode": "SMALL",
+            "rom-mode": "LARGE"
+          },
+          "c/cpp-compiler": {
+            "optimization-type": "SPEED",
+            "optimization-level": "level-8"
+          },
+          "asm-compiler": {},
+          "linker": {
+            "remove-unused": true,
+            "output-format": "elf",
+            "misc-controls": ""
+          }
+        }
+      }
+    }
+  },
+  "version": "3.5"
+}

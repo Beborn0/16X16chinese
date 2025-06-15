@@ -1,0 +1,523 @@
+C51 COMPILER V9.01   MAX7219                                                               06/11/2025 15:17:36 PAGE 1   
+
+
+C51 COMPILER V9.01, COMPILATION OF MODULE MAX7219
+OBJECT MODULE PLACED IN .\Objects\max7219.obj
+COMPILER INVOKED BY: D:\Keil\C51\BIN\C51.EXE max7219.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\max7
+                    -219.lst) OBJECT(.\Objects\max7219.obj)
+
+line level    source
+
+   1          #include "max7219.h"
+   2          
+   3          //向MAX7219 写入地址和数据
+   4          void Max7219WR(uchar addr, uchar dat)
+   5          {
+   6   1          uchar n = 8;
+   7   1          CLK = 0;
+   8   1          CS = 0; //CS=0有效,CS=1锁存
+   9   1          /*发送数据 高位先发*/
+  10   1          while(n--)
+  11   1          {
+  12   2              DIN = addr & 0x80;
+  13   2              CLK = 1;
+  14   2              addr <<= 1;
+  15   2              CLK = 0;
+  16   2          }
+  17   1          n = 8;
+  18   1          /*发送数据 高位先发*/
+  19   1          while(n--)
+  20   1          {
+  21   2              DIN = dat & 0x80;
+  22   2              CLK = 1;
+  23   2              dat <<= 1;
+  24   2              CLK = 0;
+  25   2          }
+  26   1      }
+  27          
+  28          void MAX7219Init()
+  29          {
+  30   1          uchar i, j;
+  31   1      
+  32   1          for(i = 0; i < 5; i++) //
+  33   1          {
+  34   2              for(j = number; j > 0; j--)
+  35   2                  switch(i)
+  36   2                  {
+  37   3                      case 0:
+  38   3                          Max7219WR(0x09, 0x00);
+  39   3                          break; //译码方式：BCD码 不译码
+  40   3      
+  41   3                      case 1:
+  42   3                          Max7219WR(0x0A, lum);
+  43   3                          break; //亮度 0-15 共16级
+  44   3      
+  45   3                      case 2:
+  46   3                          Max7219WR(0x0B, 0x07);
+  47   3                          break; //扫描界限；8位显示
+  48   3      
+  49   3                      case 3:
+  50   3                          Max7219WR(0x0C, 0x01);
+  51   3                          break; //掉电模式：0，普通模式：1
+  52   3      
+  53   3                      case 4:
+  54   3                          Max7219WR(0x0F, 0x00);
+C51 COMPILER V9.01   MAX7219                                                               06/11/2025 15:17:36 PAGE 2   
+
+  55   3                          break; //显示测试：1；测试结束，正常显示：0
+  56   3                  }
+  57   2      
+  58   2              CS = 1;
+  59   2              _nop_();
+  60   2              CS = 0; //每写入四次给一个锁存脉冲
+  61   2          }
+  62   1      }
+  63          
+  64          // 全局显示缓冲区，存储当前显示内容
+  65          uchar display_buffer[4][8]; // 4个模块，每个模块8行数据
+  66          
+  67          // 初始化显示缓冲区
+  68          void initDisplayBuffer()
+  69          {
+  70   1          uchar i, j;
+  71   1          for(i = 0; i < 4; i++) {
+  72   2              for(j = 0; j < 8; j++) {
+  73   3                  display_buffer[i][j] = 0x00;
+  74   3              }
+  75   2          }
+  76   1      }
+  77          
+  78          // 画点函数
+  79          // x: 0-15 (16x16点阵的X坐标)
+  80          // y: 0-15 (16x16点阵的Y坐标) 
+  81          // state: 1=点亮, 0=熄灭
+  82          // 修正后的画点函数
+  83          void drawPixel(uchar x, uchar y, uchar state)
+  84          {
+  85   1          uchar module_id, local_x, local_y, bit_pos;
+  86   1          
+  87   1          // 参数检查
+  88   1          if(x > 15 || y > 15) return;
+  89   1          
+  90   1          // 根据正确的模块映射确定模块ID和局部坐标
+  91   1          if(y < 8) { // 上半部分
+  92   2              if(x < 8) {
+  93   3                  // 左上角 - 模块1
+  94   3                  module_id = 0;
+  95   3                  local_x = x;
+  96   3                  local_y = y;
+  97   3              } else {
+  98   3                  // 右上角 - 模块2
+  99   3                  module_id = 1;
+ 100   3                  local_x = x - 8;
+ 101   3                  local_y = y;
+ 102   3              }
+ 103   2          } else { // 下半部分
+ 104   2              if(x < 8) {
+ 105   3                  // 左下角 - 模块3
+ 106   3                  module_id = 2;
+ 107   3                  local_x = x;
+ 108   3                  local_y = y - 8;
+ 109   3              } else {
+ 110   3                  // 右下角 - 模块4
+ 111   3                  module_id = 3;
+ 112   3                  local_x = x - 8;
+ 113   3                  local_y = y - 8;
+ 114   3              }
+ 115   2          }
+ 116   1          
+C51 COMPILER V9.01   MAX7219                                                               06/11/2025 15:17:36 PAGE 3   
+
+ 117   1          // 计算位位置（MAX7219的位7是最左边的点）
+ 118   1          bit_pos = 7 - local_x;
+ 119   1          
+ 120   1          // 设置或清除对应的位
+ 121   1          if(state) {
+ 122   2              display_buffer[module_id][local_y] |= (1 << bit_pos);  // 点亮
+ 123   2          } else {
+ 124   2              display_buffer[module_id][local_y] &= ~(1 << bit_pos); // 熄灭
+ 125   2          }
+ 126   1      }
+ 127          
+ 128          // 修正后的更新显示函数
+ 129          void updateDisplay()
+ 130          {
+ 131   1          uchar i;
+ 132   1          
+ 133   1          for(i = 0; i < 8; i++) {
+ 134   2              // 按正确的发送顺序：[3]→[2]→[1]→[0]
+ 135   2              // 模块4（右下）→ 模块3（左下）→ 模块2（右上）→ 模块1（左上）
+ 136   2              Max7219WR(i + 1, display_buffer[3][i]); // 模块4（右下）
+ 137   2              Max7219WR(i + 1, display_buffer[2][i]); // 模块3（左下）
+ 138   2              Max7219WR(i + 1, display_buffer[1][i]); // 模块2（右上）
+ 139   2              Max7219WR(i + 1, display_buffer[0][i]); // 模块1（左上）
+ 140   2              
+ 141   2              CS = 1; // 锁存数据
+ 142   2              _nop_();
+ 143   2              CS = 0;
+ 144   2          }
+ 145   1      }
+ 146          // 清屏函数
+ 147          void clearScreen()
+ 148          {
+ 149   1          initDisplayBuffer();
+ 150   1          updateDisplay();
+ 151   1      }
+ 152          // 清除指定区域
+ 153          void clearArea(uchar x, uchar y, uchar width, uchar height)
+ 154          {
+ 155   1          uchar i, j;
+ 156   1          for(i = 0; i < height; i++) {
+ 157   2              for(j = 0; j < width; j++) {
+ 158   3                  if((x + j) < 16 && (y + i) < 16) {
+ 159   4                      drawPixel(x + j, y + i, 0);
+ 160   4                  }
+ 161   3              }
+ 162   2          }
+ 163   1      }
+ 164          // 画线函数（额外功能）
+ 165          void drawLine(uchar x0, uchar y0, uchar x1, uchar y1)
+ 166          {
+ 167   1          int dx = abs(x1 - x0);
+ 168   1          int dy = abs(y1 - y0);
+ 169   1          int sx = x0 < x1 ? 1 : -1;
+ 170   1          int sy = y0 < y1 ? 1 : -1;
+ 171   1          int err = dx - dy;
+ 172   1          int e2;
+ 173   1          
+ 174   1          while(1) {
+ 175   2              drawPixel(x0, y0, 1);
+ 176   2              
+ 177   2              if(x0 == x1 && y0 == y1) break;
+ 178   2              
+C51 COMPILER V9.01   MAX7219                                                               06/11/2025 15:17:36 PAGE 4   
+
+ 179   2              e2 = 2 * err;
+ 180   2              if(e2 > -dy) {
+ 181   3                  err -= dy;
+ 182   3                  x0 += sx;
+ 183   3              }
+ 184   2              if(e2 < dx) {
+ 185   3                  err += dx;
+ 186   3                  y0 += sy;
+ 187   3              }
+ 188   2          }
+ 189   1      }
+ 190          
+ 191          // 画矩形函数
+ 192          void drawRect(uchar x, uchar y, uchar width, uchar height)
+ 193          {
+ 194   1          uchar i;
+ 195   1          // 画四条边
+ 196   1          for(i = 0; i < width; i++) {
+ 197   2              drawPixel(x + i, y, 1);         // 上边
+ 198   2              drawPixel(x + i, y + height - 1, 1); // 下边
+ 199   2          }
+ 200   1          for(i = 0; i < height; i++) {
+ 201   2              drawPixel(x, y + i, 1);         // 左边
+ 202   2              drawPixel(x + width - 1, y + i, 1);  // 右边
+ 203   2          }
+ 204   1      }
+ 205          
+ 206          // 使用现有的laji数组测试S型级联
+ 207          uchar code laji[][8] =
+ 208          {
+ 209              {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80}, //A
+ 210              {0x7C, 0x42, 0x42, 0x7C, 0x42, 0x42, 0x42, 0x7C}, //B
+ 211              {0x3C, 0x42, 0x40, 0x40, 0x40, 0x40, 0x42, 0x7C}, //C
+ 212              {0x7C, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x7C}, //D
+ 213          };
+ 214          
+ 215          // 修正后的S型显示测试函数
+ 216          void displayS_Type()
+ 217          {
+ 218   1          uchar i;
+ 219   1          
+ 220   1          for(i = 0; i < 8; i++)  // 8行
+ 221   1          {
+ 222   2              // 按正确的发送顺序：[3]→[2]→[1]→[0]
+ 223   2              Max7219WR(i + 1, laji[3][i]);  // 模块4（右下）
+ 224   2              Max7219WR(i + 1, laji[2][i]);  // 模块3（左下）
+ 225   2              Max7219WR(i + 1, laji[1][i]);  // 模块2（右上） 
+ 226   2              Max7219WR(i + 1, laji[0][i]);  // 模块1（左上）
+ 227   2              
+ 228   2              CS = 1;
+ 229   2              _nop_();
+ 230   2              CS = 0;
+ 231   2          }
+ 232   1      }
+ 233          // 适用于行列式低位在前取模方式的16x16汉字显示函数
+ 234          void displayHanzi16x16_RowColumn_LowFirst(uchar x_offset, uchar y_offset, uchar *hanzi_data)
+ 235          {
+ 236   1          uchar row, col, byte_index, bit_index;
+ 237   1          uchar current_byte;
+ 238   1          
+ 239   1          // 遍历16x16的每一个点
+ 240   1          for(row = 0; row < 16; row++) {
+C51 COMPILER V9.01   MAX7219                                                               06/11/2025 15:17:36 PAGE 5   
+
+ 241   2              for(col = 0; col < 16; col++) {
+ 242   3                  // 行列式取模：每行为一个取模单位，每行16位分为2个字节
+ 243   3                  byte_index = row * 2 + (col / 8);  // 每行2字节，列除以8确定字节
+ 244   3                  bit_index = col % 8;               // 位索引（低位在前，从bit0开始）
+ 245   3                  
+ 246   3                  // 获取当前字节
+ 247   3                  current_byte = hanzi_data[byte_index];
+ 248   3                  
+ 249   3                  // 检查当前位是否为1，如果是则画点
+ 250   3                  if(current_byte & (1 << bit_index)) {
+ 251   4                      drawPixel(x_offset + col, y_offset + row, 1);
+ 252   4                  } else {
+ 253   4                      drawPixel(x_offset + col, y_offset + row, 0);
+ 254   4                  }
+ 255   3              }
+ 256   2          }
+ 257   1      }
+ 258          // 显示8x8小字符函数
+ 259          void displayChar8x8(uchar x_offset, uchar y_offset, uchar *char_data)
+ 260          {
+ 261   1          uchar row, col, bit_index;
+ 262   1          uchar current_byte;
+ 263   1          
+ 264   1          // 遍历8x8的每一个点
+ 265   1          for(row = 0; row < 8; row++) {
+ 266   2              current_byte = char_data[row];
+ 267   2              for(col = 0; col < 8; col++) {
+ 268   3                  bit_index = 7 - col;  // 高位在前
+ 269   3                  
+ 270   3                  // 检查当前位是否为1，如果是则画点
+ 271   3                  if(current_byte & (1 << bit_index)) {
+ 272   4                      drawPixel(x_offset + col, y_offset + row, 1);
+ 273   4                  } else {
+ 274   4                      drawPixel(x_offset + col, y_offset + row, 0);
+ 275   4                  }
+ 276   3              }
+ 277   2          }
+ 278   1      }
+ 279          
+ 280          // 添加字符串比较函数（如果标准库不可用）
+ 281          uchar strcmp_custom(char *str1, char *str2)
+ 282          {
+ 283   1          while(*str1 && *str2) {
+ 284   2              if(*str1 != *str2) return 1;  // 不相等
+ 285   2              str1++;
+ 286   2              str2++;
+ 287   2          }
+ 288   1          return (*str1 != *str2);  // 0表示相等，1表示不相等
+ 289   1      }
+ 290          // 获取字库大小
+ 291          #define LED_CF16x16_SIZE 50  // 根据实际字库大小调整
+ 292          // MAX7219显示汉字字符串函数
+ 293          void MAX7219_ShowString(uchar X, uchar Y, char *String)
+ 294          {
+ 295   1          uchar i = 0;
+ 296   1          char SingleChar[3];  // GB2312最多2字节+结束符
+ 297   1          uchar CharLength = 0;
+ 298   1          uchar XOffset = 0;
+ 299   1          uchar YOffset = 0;
+ 300   1          uchar pIndex;
+ 301   1          
+ 302   1          while (String[i] != '\0')  // 遍历字符串
+C51 COMPILER V9.01   MAX7219                                                               06/11/2025 15:17:36 PAGE 6   
+
+ 303   1          {
+ 304   2              // GB2312字符集处理
+ 305   2              // 提取GB2312字符串中的一个字符，转存到SingleChar子字符串中
+ 306   2              // 判断GB2312字节的最高位标志位
+ 307   2              if ((String[i] & 0x80) == 0x00)  // 最高位为0，ASCII字符
+ 308   2              {
+ 309   3                  CharLength = 1;                    // 字符为1字节
+ 310   3                  SingleChar[0] = String[i++];       // 将第一个字节写入SingleChar第0个位置
+ 311   3                  SingleChar[1] = '\0';              // 添加字符串结束标志位
+ 312   3              }
+ 313   2              else  // 最高位为1，汉字
+ 314   2              {
+ 315   3                  CharLength = 2;                    // 字符为2字节
+ 316   3                  SingleChar[0] = String[i++];       // 将第一个字节写入SingleChar第0个位置
+ 317   3                  if (String[i] == '\0') {break;}    // 意外情况，跳出循环
+ 318   3                  SingleChar[1] = String[i++];       // 将第二个字节写入SingleChar第1个位置
+ 319   3                  SingleChar[2] = '\0';              // 添加字符串结束标志位
+ 320   3              }
+ 321   2              
+ 322   2              // 显示上述代码提取到的SingleChar
+ 323   2              if (CharLength == 1)  // 如果是单字节字符（ASCII）
+ 324   2              {
+ 325   3                  // 显示ASCII字符（8x8）
+ 326   3                  if (SingleChar[0] >= '0' && SingleChar[0] <= '9') {
+ 327   4                      // 这里可以添加数字字符显示
+ 328   4                      // displayChar8x8(X + XOffset, Y + YOffset, num_data[SingleChar[0] - '0']);
+ 329   4                  }
+ 330   3                  XOffset += 8;  // ASCII字符宽度为8
+ 331   3              }
+ 332   2              else  // 否则，即多字节字符（汉字）
+ 333   2              {
+ 334   3                  // 遍历整个字模库，从字模库中寻找此字符的数据
+ 335   3                  // 如果找到最后一个字符（定义为空字符串），则表示字符未在字模库定义
+ 336   3                  for (pIndex = 0; strcmp_custom(LED_CF16x16[pIndex].Index, "") != 0; pIndex++)
+ 337   3                  {
+ 338   4                      // 找到匹配的字符
+ 339   4                      if (strcmp_custom(LED_CF16x16[pIndex].Index, SingleChar) == 0)
+ 340   4                      {
+ 341   5                          break;  // 跳出循环，此时pIndex的值为指定字符的索引
+ 342   5                      }
+ 343   4                  }
+ 344   3                  // 将字模库LED_CF16x16的指定数据以16x16的图像格式显示
+ 345   3                  displayHanzi16x16_RowColumn_LowFirst(X + XOffset, Y + YOffset, 
+ 346   3                                                     (uchar*)LED_CF16x16[pIndex].Data);
+ 347   3                  XOffset += 16;  // 汉字宽度为16
+ 348   3              }
+ 349   2              // 检查是否需要换行（16x16显示区域只能显示一个汉字）
+ 350   2              if (XOffset >= 16) {
+ 351   3                  XOffset = 0;
+ 352   3                  YOffset += 16;
+ 353   3                  // 如果超出显示范围，停止显示
+ 354   3                  if (YOffset >= 16) {
+ 355   4                      break;
+ 356   4                  }
+ 357   3              }
+ 358   2          }
+ 359   1      }
+ 360          
+ 361          // 简化版：显示单行汉字字符串（只显示第一个字符）
+ 362          void MAX7219_ShowSingleChinese(uchar X, uchar Y, char *String)
+ 363          {
+ 364   1          uchar i = 0;
+C51 COMPILER V9.01   MAX7219                                                               06/11/2025 15:17:36 PAGE 7   
+
+ 365   1          char SingleChar[3];
+ 366   1          uchar CharLength = 0;
+ 367   1          uchar pIndex;
+ 368   1          
+ 369   1          if (String[i] != '\0')  // 如果字符串不为空
+ 370   1          {
+ 371   2              // 提取第一个字符
+ 372   2              if ((String[i] & 0x80) == 0x00)  // ASCII字符
+ 373   2              {
+ 374   3                  CharLength = 1;
+ 375   3                  SingleChar[0] = String[i];
+ 376   3                  SingleChar[1] = '\0';
+ 377   3                  
+ 378   3                  // 显示ASCII字符的处理
+ 379   3                  // 这里可以添加ASCII字符显示代码
+ 380   3              }
+ 381   2              else  // 汉字
+ 382   2              {
+ 383   3                  CharLength = 2;
+ 384   3                  SingleChar[0] = String[i];
+ 385   3                  SingleChar[1] = String[i + 1];
+ 386   3                  SingleChar[2] = '\0';
+ 387   3                  
+ 388   3                  // 在字库中查找汉字
+ 389   3                  for (pIndex = 0; strcmp_custom(LED_CF16x16[pIndex].Index, "") != 0; pIndex++)
+ 390   3                  {
+ 391   4                      if (strcmp_custom(LED_CF16x16[pIndex].Index, SingleChar) == 0)
+ 392   4                      {
+ 393   5                          break;
+ 394   5                      }
+ 395   4                  }
+ 396   3                  
+ 397   3                  // 显示找到的汉字
+ 398   3                  displayHanzi16x16_RowColumn_LowFirst(X, Y, (uchar*)LED_CF16x16[pIndex].Data);
+ 399   3              }
+ 400   2          }
+ 401   1      }
+ 402          
+ 403          // 通过索引直接显示汉字（更高效）
+ 404          void MAX7219_ShowChineseByIndex(uchar X, uchar Y, uchar index)
+ 405          {
+ 406   1          // 检查索引范围
+ 407   1          if (strcmp_custom(LED_CF16x16[index].Index, "") != 0)
+ 408   1          {
+ 409   2              displayHanzi16x16_RowColumn_LowFirst(X, Y, (uchar*)LED_CF16x16[index].Data);
+ 410   2          }
+ 411   1          else
+ 412   1          {
+ 413   2              // 显示默认图形（方框+问号）
+ 414   2              displayHanzi16x16_RowColumn_LowFirst(X, Y, (uchar*)LED_CF16x16[index].Data);
+ 415   2          }
+ 416   1      }
+ 417          uint8_t code hanzi_ni[32] = {
+ 418              0x10,0x01,0x10,0x01,0x10,0x01,0x88,0x7F,0x88,0x40,0x4C,0x20,0x2C,0x04,0x0A,0x04,
+ 419              0x89,0x14,0x88,0x24,0x48,0x24,0x48,0x44,0x28,0x44,0x08,0x04,0x08,0x05,0x08,0x02,/*"你",0*/
+ 420          };
+ 421          uint8_t code hanzi_hao[32] = {
+ 422              0x08,0x00,0x08,0x3F,0x08,0x20,0x08,0x10,0x3F,0x08,0x24,0x04,0x24,0x04,0xA4,0x7F,
+ 423              0x24,0x04,0x12,0x04,0x14,0x04,0x08,0x04,0x14,0x04,0x22,0x04,0x21,0x05,0x00,0x02,/*"好",1*/
+ 424          };
+ 425          uint8_t code hanzi_kang[32] = {
+ 426              0x80,0x00,0x00,0x01,0xFC,0x7F,0x04,0x01,0xF4,0x1F,0x04,0x11,0xFC,0x7F,0x04,0x11,
+C51 COMPILER V9.01   MAX7219                                                               06/11/2025 15:17:36 PAGE 8   
+
+ 427              0xF4,0x1F,0x14,0x01,0x24,0x23,0x44,0x15,0x22,0x09,0x12,0x11,0x49,0x61,0x80,0x00,/*"康",0*/
+ 428          };
+ 429          uint8_t code hanzi_ru[32] = {
+ 430              0x08,0x00,0x08,0x00,0x08,0x00,0x08,0x3E,0x7F,0x22,0x44,0x22,0x44,0x22,0x44,0x22,
+ 431              0x42,0x22,0x24,0x22,0x28,0x22,0x10,0x22,0x28,0x22,0x44,0x3E,0x42,0x22,0x01,0x00,/*"如",1*/
+ 432          };
+ 433          uint8_t code hanzi_yun[32] = {
+ 434              0x00,0x00,0xFC,0x1F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xFF,0x7F,0x40,0x00,
+ 435              0x20,0x00,0x20,0x00,0x10,0x02,0x08,0x04,0x04,0x08,0xFE,0x1F,0x04,0x10,0x00,0x10,/*"云",2*/
+ 436          };
+ 437          /*宽16像素，高16像素*/
+ 438          const ChineseCell_t  code LED_CF16x16[] = {
+ 439                  
+ 440                  "，",
+ 441                  0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+ 442                  0x00,0x00,0x58,0x38,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+ 443                  
+ 444                  "。",
+ 445                  0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+ 446                  0x00,0x00,0x18,0x24,0x24,0x18,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+ 447                  
+ 448                  "你",
+ 449                  0x10,0x01,0x10,0x01,0x10,0x01,0x88,0x7F,0x88,0x40,0x4C,0x20,0x2C,0x04,0x0A,0x04,
+ 450              0x89,0x14,0x88,0x24,0x48,0x24,0x48,0x44,0x28,0x44,0x08,0x04,0x08,0x05,0x08,0x02,/*"你",0*/
+ 451                  
+ 452                  "好",
+ 453                  0x08,0x00,0x08,0x3F,0x08,0x20,0x08,0x10,0x3F,0x08,0x24,0x04,0x24,0x04,0xA4,0x7F,
+ 454              0x24,0x04,0x12,0x04,0x14,0x04,0x08,0x04,0x14,0x04,0x22,0x04,0x21,0x05,0x00,0x02,/*"好",1*/
+ 455          
+ 456              "康",
+ 457              0x80,0x00,0x00,0x01,0xFC,0x7F,0x04,0x01,0xF4,0x1F,0x04,0x11,0xFC,0x7F,0x04,0x11,
+ 458              0xF4,0x1F,0x14,0x01,0x24,0x23,0x44,0x15,0x22,0x09,0x12,0x11,0x49,0x61,0x80,0x00,/*"康",0*/
+ 459              
+ 460              "如",
+ 461              0x08,0x00,0x08,0x00,0x08,0x00,0x08,0x3E,0x7F,0x22,0x44,0x22,0x44,0x22,0x44,0x22,
+ 462              0x42,0x22,0x24,0x22,0x28,0x22,0x10,0x22,0x28,0x22,0x44,0x3E,0x42,0x22,0x01,0x00,/*"如",1*/
+ 463          
+ 464              "云",
+ 465              0x00,0x00,0xFC,0x1F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xFF,0x7F,0x40,0x00,
+ 466              0x20,0x00,0x20,0x00,0x10,0x02,0x08,0x04,0x04,0x08,0xFE,0x1F,0x04,0x10,0x00,0x10,/*"云",2*/
+ 467          
+ 468                  "世",
+ 469                  0x40,0x04,0x48,0x04,0x48,0x04,0x48,0x04,0x48,0x04,0xFF,0x7F,0x48,0x04,0x48,0x04,
+ 470              0x48,0x04,0x48,0x04,0xC8,0x07,0x08,0x00,0x08,0x00,0x08,0x00,0xF8,0x3F,0x00,0x00,/*"世",0*/
+ 471                  
+ 472                  "界",
+ 473                  0x00,0x00,0xF8,0x0F,0x88,0x08,0x88,0x08,0xF8,0x0F,0x88,0x08,0x88,0x08,0xF8,0x0F,
+ 474              0x40,0x01,0x30,0x06,0x2C,0x1A,0x23,0x62,0x20,0x02,0x10,0x02,0x10,0x02,0x08,0x02,/*"界",1*/
+ 475                  
+ 476                  /*按照上面的格式，在这个位置加入新的汉字数据*/
+ 477                  //...
+ 478                  /*未找到指定汉字时显示的默认图形（一个方框，内部一个问号），请确保其位于数组最末尾*/
+ 479                  "",             
+ 480                  0xFF,0x01,0x01,0x01,0x31,0x09,0x09,0x09,0x09,0x89,0x71,0x01,0x01,0x01,0x01,0xFF,
+ 481                  0xFF,0x80,0x80,0x80,0x80,0x80,0x80,0x96,0x81,0x80,0x80,0x80,0x80,0x80,0x80,0xFF,
+ 482          
+ 483          };
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1535    ----
+   CONSTANT SIZE    =    543    ----
+C51 COMPILER V9.01   MAX7219                                                               06/11/2025 15:17:36 PAGE 9   
+
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     32      68
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

@@ -1,0 +1,4 @@
+".\Objects\main.obj",
+".\Objects\max7219.obj" 
+TO ".\Objects\MAX7219" 
+PRINT(".\Listings\MAX7219.m51") RAMSIZE(256) 

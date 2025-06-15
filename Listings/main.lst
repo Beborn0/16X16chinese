@@ -1,0 +1,103 @@
+C51 COMPILER V9.01   MAIN                                                                  06/11/2025 15:21:33 PAGE 1   
+
+
+C51 COMPILER V9.01, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: D:\Keil\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\main.ls
+                    -t) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          // Header:      AT89C52
+   2          // File Name: MAX7219
+   3          // Author:      Kry
+   4          // Date:        2025/6/11
+   5          // Version:     1.0
+   6          // Description: 基于MAX7219设计的级联型16X16汉字显示模块
+   7          /*
+   8              支持三种方式显示，索引方式、字符串方式、单个汉字方式。
+   9              1. 索引方式：通过索引直接显示汉字，效率更高。
+  10              2. 字符串方式：显示字符串，支持汉字和ASCII字符。
+  11              3. 单个汉字方式：显示单个汉字，适合动态显示。
+  12              4. 支持8x8字符显示。
+  13          */
+  14          #include <reg52.h>
+  15          #include "intrins.h"
+  16          #include "Max7219.h"
+  17          /**********delay********** */
+  18          void delay_ms(unsigned int ms)
+  19          {
+  20   1          unsigned int i, j;
+  21   1          for (i = 0; i < ms; i++)
+  22   1              for (j = 0; j < 127; j++);
+  23   1      }
+  24          /******************** */
+  25          // 数字字符取模数据示例（8x8）
+  26          uchar code num_0[8] = {0x3C,0x66,0x66,0x66,0x66,0x66,0x66,0x3C};
+  27          uchar code num_1[8] = {0x18,0x38,0x18,0x18,0x18,0x18,0x18,0x7E};
+  28          void main()
+  29          {
+  30   1          MAX7219Init();
+  31   1          initDisplayBuffer(); // 初始化显示缓冲区
+  32   1          while(1)
+  33   1          {
+  34   2              // 方法1：显示单个汉字
+  35   2              clearScreen();
+  36   2              MAX7219_ShowSingleChinese(0, 0, "你");
+  37   2              updateDisplay();
+  38   2              delay_ms(1000);
+  39   2              
+  40   2              clearScreen();
+  41   2              MAX7219_ShowSingleChinese(0, 0, "好");
+  42   2              updateDisplay();
+  43   2              delay_ms(1000);
+  44   2              
+  45   2              clearScreen();
+  46   2              MAX7219_ShowSingleChinese(0, 0, "世");
+  47   2              updateDisplay();
+  48   2              delay_ms(1000);
+  49   2              
+  50   2              clearScreen();
+  51   2              MAX7219_ShowSingleChinese(0, 0, "界");
+  52   2              updateDisplay();
+  53   2              delay_ms(1000);
+  54   2      
+C51 COMPILER V9.01   MAIN                                                                  06/11/2025 15:21:33 PAGE 2   
+
+  55   2              clearScreen();
+  56   2              MAX7219_ShowSingleChinese(0, 0, "康");
+  57   2              updateDisplay();
+  58   2              delay_ms(1000);
+  59   2              clearScreen();
+  60   2              MAX7219_ShowSingleChinese(0, 0, "如");
+  61   2              updateDisplay();
+  62   2              delay_ms(1000);
+  63   2              clearScreen();
+  64   2              MAX7219_ShowSingleChinese(0, 0, "云");
+  65   2              updateDisplay();
+  66   2              delay_ms(1000);
+  67   2              
+  68   2              // // 显示数字字符示例
+  69   2              clearScreen();
+  70   2              displayChar8x8(0, 0, num_0);    // 左上角显示"0"
+  71   2              displayChar8x8(8, 0, num_1);    // 右上角显示"1"
+  72   2              displayChar8x8(0, 8, num_0);    // 左下角显示"0"
+  73   2              displayChar8x8(8, 8, num_1);    // 右下角显示"1"
+  74   2              updateDisplay();
+  75   2              delay_ms(2000); // 延时2秒
+  76   2          }
+  77   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    256    ----
+   CONSTANT SIZE    =     37    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
